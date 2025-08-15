@@ -7,6 +7,8 @@ import 'core/router/app_route.dart';
 import 'core/theme/app_theme.dart';
 import 'features/auth/data/auth_repository.dart';
 import 'features/auth/presentation/cubit/auth_cubit.dart';
+import 'features/conversion/data/currency_repository.dart';
+import 'features/conversion/presentation/cubit/conversion_cubit.dart';
 import 'firebase_options.dart';
 
 Future<void> main() async {
@@ -37,7 +39,10 @@ class MyApp extends StatelessWidget {
     );
 
     return MultiBlocProvider(
-      providers: [BlocProvider<AuthCubit>(create: (_) => AuthCubit(sl<AuthRepository>()))],
+      providers: [
+        BlocProvider<AuthCubit>(create: (_) => AuthCubit(sl<AuthRepository>())),
+        BlocProvider<ConversionCubit>(create: (_) => ConversionCubit(sl<CurrencyRepository>())),
+      ],
       child: material,
     );
   }

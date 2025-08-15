@@ -2,8 +2,10 @@ import 'package:get_it/get_it.dart';
 import 'package:dio/dio.dart';
 
 import '../../features/auth/data/auth_repository.dart';
+import '../../features/conversion/data/currency_repository.dart';
 import '../config/app_config.dart';
 import '../network/api_client.dart';
+import '../storage/cache_service.dart';
 
 final sl = GetIt.instance;
 
@@ -12,4 +14,8 @@ Future<void> initDependencies() async {
     () => ApiClient.buildDio(baseUrl: AppConfig.baseUrl, accessKey: AppConfig.accessKey),
   );
   sl.registerLazySingleton<AuthRepository>(() => AuthRepository());
+  sl.registerLazySingleton<CacheService>(() => CacheService());
+  sl.registerLazySingleton<CurrencyRepository>(
+    () => CurrencyRepository(dio: sl<Dio>(), cache: sl<CacheService>()),
+  );
 }
