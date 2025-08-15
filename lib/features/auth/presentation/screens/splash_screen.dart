@@ -1,7 +1,10 @@
-import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
+import 'dart:async';
 
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
 import '../../../../core/router/app_route.dart';
+import '../cubit/auth_cubit.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -11,16 +14,43 @@ class SplashScreen extends StatefulWidget {
 }
 
 class _SplashScreenState extends State<SplashScreen> {
+  StreamSubscription<AuthState>? _sub;
+
   @override
   void initState() {
     super.initState();
-    Future.delayed(const Duration(seconds: 2), () {
-      if (mounted) context.go(AppRouter.loginRoute);
+    Future<void>.delayed(const Duration(seconds: 2), () {
+      if (!mounted) return;
+      final cubit = context.read<AuthCubit>();
+
+      void navigate(AuthState s) {
+        if (!mounted) return;
+        if (s.unknown || s.loading) return;
+        if (s.user != null) {
+          context.go(AppRouter.homeRoute);
+        } else {
+          context.go(AppRouter.loginRoute);
+        }
+      }
+
+      final current = cubit.state;
+      if (!current.unknown && !current.loading) {
+        navigate(current);
+        return;
+      }
+      _sub = cubit.stream.listen((s) {
+        if (!s.unknown && !s.loading) {
+          navigate(s);
+          _sub?.cancel();
+          _sub = null;
+        }
+      });
     });
   }
 
   @override
   void dispose() {
+    _sub?.cancel();
     super.dispose();
   }
 
@@ -47,7 +77,7 @@ class _SplashScreenState extends State<SplashScreen> {
             children: [
               TweenAnimationBuilder<double>(
                 tween: Tween(begin: 0, end: 1),
-                duration: const Duration(seconds: 1),
+                duration: const Duration(milliseconds: 900),
                 curve: Curves.easeOutCubic,
                 builder: (context, value, child) {
                   return Transform.scale(
