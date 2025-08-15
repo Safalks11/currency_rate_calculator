@@ -16,9 +16,12 @@ class AppTheme {
         style: ElevatedButton.styleFrom(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          foregroundColor: Colors.white,
+          backgroundColor: Colors.teal,
           textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
         ),
       ),
+
       pageTransitionsTheme: const PageTransitionsTheme(
         builders: {
           TargetPlatform.android: SharedAxisPageTransitionsBuilder(

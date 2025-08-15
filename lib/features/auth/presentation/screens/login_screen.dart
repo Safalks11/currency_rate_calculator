@@ -1,5 +1,7 @@
 import 'package:auto_size_text/auto_size_text.dart';
+import 'package:currency_rate_calculator/core/router/app_route.dart';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 class LoginScreen extends StatelessWidget {
   const LoginScreen({super.key});
@@ -35,7 +37,9 @@ class LoginScreen extends StatelessWidget {
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
-                    onPressed: () {},
+                    onPressed: () {
+                      context.go(AppRouter.homeRoute);
+                    },
                     style: ButtonStyle(backgroundColor: WidgetStatePropertyAll(Colors.green)),
                     child: const Text('Login'),
                   ),
