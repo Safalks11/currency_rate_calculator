@@ -17,7 +17,14 @@ class ConversionFormState extends Equatable {
   });
 
   const ConversionFormState.initial()
-      : this(from: 'USD', to: 'INR', amount: '1', swapTurns: 0, recentPairs: const []);
+      : this(
+          from: 'USD',
+          to: 'INR',
+          amount: '1',
+          swapTurns: 0,
+          // Seed with the default pair so recent chips show immediately
+          recentPairs: const ['USD-INR'],
+        );
 
   ConversionFormState copyWith({
     String? from,
@@ -51,7 +58,11 @@ class ConversionFormCubit extends Cubit<ConversionFormState> {
   void selectPair(String pair) {
     final parts = pair.split('-');
     if (parts.length == 2) {
-      emit(state.copyWith(from: parts[0], to: parts[1]));
+      emit(state.copyWith(
+        from: parts[0],
+        to: parts[1],
+        recentPairs: _rememberPair(state.recentPairs, parts[0], parts[1]),
+      ));
     }
   }
 

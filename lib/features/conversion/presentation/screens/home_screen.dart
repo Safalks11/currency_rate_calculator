@@ -10,6 +10,7 @@ import '../../../auth/presentation/cubit/auth_cubit.dart';
 import '../widgets/amount_input_formatter.dart';
 import '../widgets/animated_convert_button.dart';
 import '../widgets/currency_picker_sheet.dart';
+import '../widgets/recent_pairs_chip.dart';
 import '../widgets/result_card.dart';
 import '../widgets/result_error.dart';
 import '../widgets/result_skeleton.dart';
@@ -21,29 +22,6 @@ class HomeScreen extends StatefulWidget {
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
-}
-
-class _RecentPairs extends StatelessWidget {
-  final List<String> pairs;
-  final ValueChanged<String> onSelect;
-  const _RecentPairs({required this.pairs, required this.onSelect});
-
-  @override
-  Widget build(BuildContext context) {
-    if (pairs.isEmpty) return const SizedBox.shrink();
-    return Wrap(
-      spacing: 8,
-      runSpacing: 4,
-      children: [
-        for (final p in pairs)
-          InputChip(
-            label: Text(p.replaceAll('-', ' → ')),
-            avatar: const Icon(Icons.history, size: 18),
-            onPressed: () => onSelect(p),
-          ),
-      ],
-    );
-  }
 }
 
 class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMixin {
@@ -85,9 +63,9 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     );
     if (code != null && code.isNotEmpty) {
       if (pickingFrom) {
-        context.read<ConversionFormCubit>().setFrom(code);
+        if (mounted) context.read<ConversionFormCubit>().setFrom(code);
       } else {
-        context.read<ConversionFormCubit>().setTo(code);
+        if (mounted) context.read<ConversionFormCubit>().setTo(code);
       }
     }
   }
@@ -213,7 +191,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                             ),
                           ),
                           const SizedBox(height: 8),
-                          _RecentPairs(
+                          RecentPairs(
                             pairs: formState.recentPairs,
                             onSelect: (pair) =>
                                 context.read<ConversionFormCubit>().selectPair(pair),
