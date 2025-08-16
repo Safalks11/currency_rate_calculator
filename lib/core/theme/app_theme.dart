@@ -10,7 +10,7 @@ class AppTheme {
     );
 
     return base.copyWith(
-      appBarTheme: const AppBarTheme(centerTitle: true),
+      appBarTheme: const AppBarTheme(centerTitle: true, foregroundColor: Colors.white70),
       inputDecorationTheme: const InputDecorationTheme(border: OutlineInputBorder()),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(

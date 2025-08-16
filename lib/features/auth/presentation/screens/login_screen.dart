@@ -17,7 +17,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   final _formKey = GlobalKey<FormState>();
   final _email = TextEditingController();
   final _password = TextEditingController();
-  bool _isLogin = true;
+  final ValueNotifier<bool> _isLogin = ValueNotifier<bool>(true);
   late final AnimationController _shake;
 
   @override
@@ -30,6 +30,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   void dispose() {
     _email.dispose();
     _password.dispose();
+    _isLogin.dispose();
     _shake.dispose();
     super.dispose();
   }
@@ -39,7 +40,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       _shake.forward(from: 0);
       return;
     }
-    if (_isLogin) {
+    if (_isLogin.value) {
       context.read<AuthCubit>().signIn(_email.text.trim(), _password.text.trim());
     } else {
       context.read<AuthCubit>().signUp(_email.text.trim(), _password.text.trim());
@@ -76,109 +77,112 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                   ),
                   child: Form(
                     key: _formKey,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 300),
-                          transitionBuilder: (child, animation) {
-                            return ScaleTransition(scale: animation, child: child);
-                          },
-                          child: Icon(
-                            _isLogin
-                                ? Icons.currency_exchange_rounded
-                                : Icons.person_add_alt_1_rounded,
-                            key: ValueKey(_isLogin), // ensures AnimatedSwitcher runs
-                            size: 64,
-                            color: _isLogin
-                                ? Theme.of(context).colorScheme.primary
-                                : Colors.tealAccent,
+                    child: ValueListenableBuilder<bool>(
+                      valueListenable: _isLogin,
+                      builder: (context, isLogin, _) => Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 300),
+                            transitionBuilder: (child, animation) {
+                              return ScaleTransition(scale: animation, child: child);
+                            },
+                            child: Icon(
+                              isLogin
+                                  ? Icons.currency_exchange_rounded
+                                  : Icons.person_add_alt_1_rounded,
+                              key: ValueKey(isLogin),
+                              size: 64,
+                              color: isLogin
+                                  ? Theme.of(context).colorScheme.primary
+                                  : Colors.tealAccent,
+                            ),
                           ),
-                        ),
 
-                        const SizedBox(height: 16),
-                        AutoSizeText(
-                          'Currency Rate Calculator',
-                          maxLines: 1,
-                          textAlign: TextAlign.center,
-                          style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
+                          const SizedBox(height: 16),
+                          AutoSizeText(
+                            'Currency Rate Calculator',
+                            maxLines: 1,
+                            textAlign: TextAlign.center,
+                            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
                           ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          _isLogin
-                              ? 'Welcome back! Please log in to continue.'
-                              : 'Create your account to get started.',
-                          textAlign: TextAlign.center,
-                          style: Theme.of(
-                            context,
-                          ).textTheme.bodyMedium?.copyWith(color: Colors.white70),
-                        ),
-                        const SizedBox(height: 28),
+                          const SizedBox(height: 8),
+                          Text(
+                            isLogin
+                                ? 'Welcome back! Please log in to continue.'
+                                : 'Create your account to get started.',
+                            textAlign: TextAlign.center,
+                            style: Theme.of(
+                                  context,
+                                ).textTheme.bodyMedium?.copyWith(color: Colors.white70),
+                          ),
+                          const SizedBox(height: 28),
 
-                        _Shake(
-                          controller: _shake,
-                          child: Column(
-                            children: [
-                              TextFormField(
-                                controller: _email,
-                                decoration: _modernInputDecoration('Email', Icons.email_outlined),
-                                style: const TextStyle(color: Colors.white),
-                                keyboardType: TextInputType.emailAddress,
-                                validator: (v) => (v == null || v.isEmpty || !v.contains('@'))
-                                    ? 'Enter a valid email'
-                                    : null,
-                                enabled: hasAuth && !loading,
-                              ),
-                              const SizedBox(height: 16),
-                              TextFormField(
-                                controller: _password,
-                                decoration: _modernInputDecoration('Password', Icons.lock_outline),
-                                style: const TextStyle(color: Colors.white),
-                                obscureText: true,
-                                validator: (v) =>
-                                    (v == null || v.length < 6) ? 'Min 6 chars' : null,
-                                enabled: hasAuth && !loading,
-                              ),
-                            ],
+                          _Shake(
+                            controller: _shake,
+                            child: Column(
+                              children: [
+                                TextFormField(
+                                  controller: _email,
+                                  decoration: _modernInputDecoration('Email', Icons.email_outlined),
+                                  style: const TextStyle(color: Colors.white),
+                                  keyboardType: TextInputType.emailAddress,
+                                  validator: (v) => (v == null || v.isEmpty || !v.contains('@'))
+                                      ? 'Enter a valid email'
+                                      : null,
+                                  enabled: hasAuth && !loading,
+                                ),
+                                const SizedBox(height: 16),
+                                TextFormField(
+                                  controller: _password,
+                                  decoration: _modernInputDecoration('Password', Icons.lock_outline),
+                                  style: const TextStyle(color: Colors.white),
+                                  obscureText: true,
+                                  validator: (v) =>
+                                      (v == null || v.length < 6) ? 'Min 6 chars' : null,
+                                  enabled: hasAuth && !loading,
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
 
-                        const SizedBox(height: 28),
-                        FilledButton(
-                          onPressed: (!hasAuth || loading) ? null : _submit,
-                          style: FilledButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 20),
-                            backgroundColor: Theme.of(context).colorScheme.primary,
-                            textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                          const SizedBox(height: 28),
+                          FilledButton(
+                            onPressed: (!hasAuth || loading) ? null : _submit,
+                            style: FilledButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 20),
+                              backgroundColor: Theme.of(context).colorScheme.primary,
+                              textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                            ),
+                            child: AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 250),
+                              child: (loading)
+                                  ? const SizedBox(
+                                      height: 20,
+                                      width: 20,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Colors.white,
+                                      ),
+                                    )
+                                  : Text(isLogin ? 'Login' : 'Register'),
+                            ),
                           ),
-                          child: AnimatedSwitcher(
-                            duration: const Duration(milliseconds: 250),
-                            child: (loading)
-                                ? const SizedBox(
-                                    height: 20,
-                                    width: 20,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: Colors.white,
-                                    ),
-                                  )
-                                : Text(_isLogin ? 'Login' : 'Register'),
+                          const SizedBox(height: 14),
+                          TextButton(
+                            onPressed: (!hasAuth || loading)
+                                ? null
+                                : () => _isLogin.value = !_isLogin.value,
+                            child: Text(
+                              isLogin ? 'No account? Register' : 'Have an account? Login',
+                              style: const TextStyle(color: Colors.white70),
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 14),
-                        TextButton(
-                          onPressed: (!hasAuth || loading)
-                              ? null
-                              : () => setState(() => _isLogin = !_isLogin),
-                          child: Text(
-                            _isLogin ? 'No account? Register' : 'Have an account? Login',
-                            style: const TextStyle(color: Colors.white70),
-                          ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -192,7 +196,6 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     return Scaffold(
       body: Stack(
         children: [
-          // Background gradient
           Container(
             decoration: const BoxDecoration(
               gradient: LinearGradient(

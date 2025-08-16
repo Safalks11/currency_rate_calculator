@@ -5,10 +5,15 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'core/di/injection.dart';
 import 'core/router/app_route.dart';
 import 'core/theme/app_theme.dart';
-import 'features/auth/data/auth_repository.dart';
 import 'features/auth/presentation/cubit/auth_cubit.dart';
-import 'features/conversion/data/currency_repository.dart';
+import 'features/auth/domain/repositories/auth_repository.dart' as auth_domain;
+import 'features/auth/domain/usecases/sign_in.dart';
+import 'features/auth/domain/usecases/sign_up.dart';
+import 'features/auth/domain/usecases/sign_out.dart';
+import 'features/auth/domain/usecases/watch_auth_state.dart';
 import 'features/conversion/presentation/cubit/conversion_cubit.dart';
+import 'features/conversion/presentation/cubit/conversion_form_cubit.dart';
+import 'features/conversion/domain/usecases/convert_currency.dart';
 import 'firebase_options.dart';
 
 Future<void> main() async {
@@ -40,8 +45,17 @@ class MyApp extends StatelessWidget {
 
     return MultiBlocProvider(
       providers: [
-        BlocProvider<AuthCubit>(create: (_) => AuthCubit(sl<AuthRepository>())),
-        BlocProvider<ConversionCubit>(create: (_) => ConversionCubit(sl<CurrencyRepository>())),
+        BlocProvider<AuthCubit>(
+          create: (_) => AuthCubit(
+            sl<SignIn>(),
+            sl<SignUp>(),
+            sl<SignOut>(),
+            sl<WatchAuthState>(),
+            sl<auth_domain.AuthRepository>(),
+          ),
+        ),
+        BlocProvider<ConversionCubit>(create: (_) => ConversionCubit(sl<ConvertCurrency>())),
+        BlocProvider<ConversionFormCubit>(create: (_) => ConversionFormCubit()),
       ],
       child: material,
     );

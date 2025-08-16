@@ -1,16 +1,20 @@
-import 'package:auto_size_text/auto_size_text.dart';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
 import '../../../../core/data/currencies.dart';
+import '../../../../core/router/app_route.dart';
 import '../../presentation/cubit/conversion_cubit.dart';
 import '../../../auth/presentation/cubit/auth_cubit.dart';
-import '../../widgets/amount_input_formatter.dart';
-import '../../widgets/animated_convert_button.dart';
-import '../../widgets/count_up_text.dart';
-import '../../widgets/currency_picker_sheet.dart';
-import '../../widgets/result_error.dart';
-import '../../widgets/result_skeleton.dart';
-import '../../widgets/trend_sheet.dart';
+import '../widgets/amount_input_formatter.dart';
+import '../widgets/animated_convert_button.dart';
+import '../widgets/currency_picker_sheet.dart';
+import '../widgets/result_card.dart';
+import '../widgets/result_error.dart';
+import '../widgets/result_skeleton.dart';
+import '../widgets/trend_sheet.dart';
+import '../cubit/conversion_form_cubit.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -27,26 +31,23 @@ class _RecentPairs extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (pairs.isEmpty) return const SizedBox.shrink();
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: Wrap(
-        spacing: 8,
-        runSpacing: 4,
-        children: [
-          for (final p in pairs)
-            ActionChip(label: Text(p.replaceAll('-', ' → ')), onPressed: () => onSelect(p)),
-        ],
-      ),
+    return Wrap(
+      spacing: 8,
+      runSpacing: 4,
+      children: [
+        for (final p in pairs)
+          InputChip(
+            label: Text(p.replaceAll('-', ' → ')),
+            avatar: const Icon(Icons.history, size: 18),
+            onPressed: () => onSelect(p),
+          ),
+      ],
     );
   }
 }
 
 class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMixin {
-  String _from = 'USD';
-  String _to = 'INR';
   final _amount = TextEditingController(text: '1');
-  double _swapTurns = 0;
-  final List<String> _recentPairs = [];
   late final AnimationController _bounceCtrl;
 
   @override
@@ -66,39 +67,29 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   }
 
   void _swap() {
-    setState(() {
-      final t = _from;
-      _from = _to;
-      _to = t;
-      _swapTurns += 1;
-      _rememberPair();
-    });
+    HapticFeedback.lightImpact();
+    context.read<ConversionFormCubit>().swap();
   }
 
   Future<void> _pickCurrency({required bool pickingFrom}) async {
-    final current = pickingFrom ? _from : _to;
+    final form = context.read<ConversionFormCubit>().state;
+    final current = pickingFrom ? form.from : form.to;
     final code = await showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
       builder: (_) => CurrencyPickerSheet(selectedCode: current),
     );
     if (code != null && code.isNotEmpty) {
-      setState(() {
-        if (pickingFrom) {
-          _from = code;
-        } else {
-          _to = code;
-        }
-        _rememberPair();
-      });
+      if (pickingFrom) {
+        context.read<ConversionFormCubit>().setFrom(code);
+      } else {
+        context.read<ConversionFormCubit>().setTo(code);
+      }
     }
-  }
-
-  void _rememberPair() {
-    final pair = '$_from-$_to';
-    _recentPairs.remove(pair);
-    _recentPairs.insert(0, pair);
-    if (_recentPairs.length > 6) _recentPairs.removeLast();
   }
 
   void _convert() {
@@ -110,205 +101,335 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       ).showSnackBar(const SnackBar(content: Text('Enter a valid amount')));
       return;
     }
-    context.read<ConversionCubit>().convert(_from, _to, val);
+    HapticFeedback.mediumImpact();
+    final form = context.read<ConversionFormCubit>().state;
+    context.read<ConversionCubit>().convert(form.from, form.to, val);
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final surfaceColor = theme.colorScheme.surface;
+
     return Scaffold(
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
         title: const Text('Currency Converter'),
-        actions: [
-          IconButton(
-            onPressed: () => context.read<AuthCubit>().signOut(),
-            icon: const Icon(Icons.logout),
-          ),
-        ],
+        backgroundColor: Colors.transparent,
+        actions: [IconButton(onPressed: _showLogoutSheet, icon: const Icon(Icons.logout_rounded))],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: InkWell(
-                    onTap: () => _pickCurrency(pickingFrom: true),
-                    borderRadius: BorderRadius.circular(8),
-                    child: InputDecorator(
-                      decoration: const InputDecoration(labelText: 'From'),
-                      child: Row(
-                        children: [
-                          Hero(
-                            tag: 'currency-$_from',
-                            child: CircleAvatar(
-                              child: Text(currencyByCode(_from)?.flag ?? _from.substring(0, 1)),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: AutoSizeText(
-                              '$_from — ${currencyByCode(_from)?.name ?? ''}',
-                              maxLines: 1,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
+      body: Stack(
+        children: [
+          Positioned.fill(
+            child: DecoratedBox(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Color(0xFF0f2027), Color(0xFF203a43), Color(0xFF2c5364)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
                 ),
-                AnimatedRotation(
-                  turns: _swapTurns,
-                  duration: const Duration(milliseconds: 400),
-                  child: IconButton(onPressed: _swap, icon: const Icon(Icons.swap_horiz)),
-                ),
-                Expanded(
-                  child: InkWell(
-                    onTap: () => _pickCurrency(pickingFrom: false),
-                    borderRadius: BorderRadius.circular(8),
-                    child: InputDecorator(
-                      decoration: const InputDecoration(labelText: 'To'),
-                      child: Row(
-                        children: [
-                          Hero(
-                            tag: 'currency-$_to',
-                            child: CircleAvatar(
-                              child: Text(currencyByCode(_to)?.flag ?? _to.substring(0, 1)),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: AutoSizeText(
-                              '$_to — ${currencyByCode(_to)?.name ?? ''}',
-                              maxLines: 1,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            AnimatedBuilder(
-              animation: _bounceCtrl,
-              builder: (context, child) {
-                final dy = -6 * Curves.elasticOut.transform(_bounceCtrl.value);
-                return Transform.translate(offset: Offset(0, dy), child: child);
-              },
-              child: TextField(
-                controller: _amount,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                decoration: const InputDecoration(labelText: 'Amount'),
-                inputFormatters: [AmountInputFormatter()],
               ),
             ),
-            const SizedBox(height: 8),
-            _RecentPairs(
-              pairs: _recentPairs,
-              onSelect: (pair) {
-                final parts = pair.split('-');
-                if (parts.length == 2) {
-                  setState(() {
-                    _from = parts[0];
-                    _to = parts[1];
-                  });
-                }
-              },
+          ),
+          Positioned.fill(
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+              child: Container(color: Colors.black.withValues(alpha: 0.05)),
             ),
-            const SizedBox(height: 12),
-            BlocBuilder<ConversionCubit, ConversionState>(
-              buildWhen: (p, c) => p.loading != c.loading || (p.data == null) != (c.data == null),
-              builder: (context, state) {
-                final loading = state.loading;
-                final success = !state.loading && state.data != null && state.error == null;
-                return SizedBox(
-                  width: double.infinity,
-                  child: AnimatedConvertButton(
+          ),
+          ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              SizedBox(height: 100),
+              BlocBuilder<ConversionFormCubit, ConversionFormState>(
+                builder: (context, formState) {
+                  return Card(
+                    elevation: 1,
+                    color: Colors.white60,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Row(
+                        children: [
+                          Expanded(child: _currencyTile(formState.from, true)),
+                          AnimatedRotation(
+                            turns: formState.swapTurns,
+                            duration: const Duration(milliseconds: 400),
+                            child: Tooltip(
+                              message: 'Swap',
+                              child: IconButton.filledTonal(
+                                icon: const Icon(Icons.swap_horiz, size: 24),
+                                onPressed: _swap,
+                              ),
+                            ),
+                          ),
+                          Expanded(child: _currencyTile(formState.to, false)),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(height: 16),
+              BlocBuilder<ConversionFormCubit, ConversionFormState>(
+                builder: (context, formState) {
+                  return Card(
+                    elevation: 1,
+                    color: Colors.white60,
+
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Column(
+                        children: [
+                          AnimatedBuilder(
+                            animation: _bounceCtrl,
+                            builder: (context, child) {
+                              final dy = -6 * Curves.elasticOut.transform(_bounceCtrl.value);
+                              return Transform.translate(offset: Offset(0, dy), child: child);
+                            },
+                            child: TextField(
+                              controller: _amount,
+                              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                              decoration: InputDecoration(
+                                labelText: 'Amount',
+                                prefixIcon: const Icon(Icons.calculate_rounded),
+                                suffixIcon: (formState.amount.isNotEmpty)
+                                    ? IconButton(
+                                        tooltip: 'Clear',
+                                        icon: const Icon(Icons.clear),
+                                        onPressed: () {
+                                          _amount.clear();
+                                          context.read<ConversionFormCubit>().clearAmount();
+                                        },
+                                      )
+                                    : null,
+                                helperText: 'Enter the amount to convert',
+                                filled: true,
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                              ),
+                              inputFormatters: [AmountInputFormatter()],
+                              onChanged: (v) => context.read<ConversionFormCubit>().setAmount(v),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          _RecentPairs(
+                            pairs: formState.recentPairs,
+                            onSelect: (pair) =>
+                                context.read<ConversionFormCubit>().selectPair(pair),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(height: 16),
+              BlocBuilder<ConversionCubit, ConversionState>(
+                buildWhen: (p, c) =>
+                    p.loading != c.loading || (p.result == null) != (c.result == null),
+                builder: (context, state) {
+                  final loading = state.loading;
+                  final success = !state.loading && state.result != null && state.error == null;
+                  return AnimatedConvertButton(
                     onPressed: _convert,
                     loading: loading,
                     success: success,
-                  ),
-                );
-              },
-            ),
-            const SizedBox(height: 8),
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton.icon(
-                onPressed: () => showModalBottomSheet(
-                  context: context,
-                  isScrollControlled: true,
-                  builder: (_) => TrendSheet(from: _from, to: _to),
-                ),
-                icon: const Icon(Icons.trending_up),
-                label: const Text('5-Day Trend'),
+                  );
+                },
               ),
-            ),
-            const SizedBox(height: 16),
-            Expanded(
-              child: BlocBuilder<ConversionCubit, ConversionState>(
+
+              const SizedBox(height: 16),
+              BlocBuilder<ConversionCubit, ConversionState>(
                 builder: (context, state) {
                   Widget child;
                   if (state.loading) {
                     child = const ResultSkeleton();
-                  } else if (state.data != null) {
-                    final result = state.data!['result'];
-                    final rate = result is Map<String, dynamic> ? (result['rate'] as num?) : null;
-                    final target = result is Map<String, dynamic>
-                        ? (result.values.firstWhere((v) => v is num, orElse: () => 0) as num)
-                        : 0;
-                    child = _ResultCard(value: target, rate: rate);
+                  } else if (state.result != null) {
+                    final res = state.result!;
+                    final rate = res.rate;
+                    final target = res.result.values.isNotEmpty ? res.result.values.first : 0.0;
+                    child = ResultCard(value: target, rate: rate);
                   } else if (state.error != null) {
-                    child = ResultError(
-                      message: state.error!,
-                      onRetry: () {
-                        final val = double.tryParse(_amount.text.replaceAll(',', ''));
-                        if (val != null && val > 0) {
-                          context.read<ConversionCubit>().convert(_from, _to, val);
-                        }
-                      },
-                    );
+                    child = ResultError(message: state.error!, onRetry: _convert);
                   } else {
-                    child = const Center(child: Text('Enter amount and convert'));
+                    child = const Center(
+                      child: Text(
+                        'Enter amount and convert',
+                        style: TextStyle(color: Colors.white70),
+                      ),
+                    );
                   }
                   return AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 300),
+                    duration: const Duration(milliseconds: 350),
+                    switchInCurve: Curves.easeOutCubic,
+                    switchOutCurve: Curves.easeInCubic,
                     child: child,
                   );
                 },
               ),
-            ),
-          ],
-        ),
+              const SizedBox(height: 8),
+              BlocBuilder<ConversionFormCubit, ConversionFormState>(
+                builder: (context, formState) {
+                  return Align(
+                    alignment: Alignment.centerRight,
+                    child: OutlinedButton.icon(
+                      onPressed: () => showModalBottomSheet(
+                        context: context,
+                        isScrollControlled: true,
+                        backgroundColor: surfaceColor,
+                        shape: const RoundedRectangleBorder(
+                          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+                        ),
+                        builder: (_) => TrendSheet(from: formState.from, to: formState.to),
+                      ),
+                      icon: const Icon(Icons.trending_up),
+                      label: const Text('5-Day Trend'),
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
-}
 
-class _ResultCard extends StatelessWidget {
-  final num value;
-  final num? rate;
-  const _ResultCard({required this.value, required this.rate});
+  Future<void> _showLogoutSheet() async {
+    final theme = Theme.of(context);
 
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Converted Amount', style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 8),
-            CountUpText(
-              value: value,
-              fractionDigits: 4,
-              style: Theme.of(context).textTheme.displaySmall,
+    final confirmed = await showModalBottomSheet<bool>(
+      context: context,
+      backgroundColor: theme.colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (_) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 40,
+                  height: 5,
+                  margin: const EdgeInsets.only(bottom: 20),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                ),
+
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primaryContainer,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.logout_rounded,
+                    color: theme.colorScheme.onPrimaryContainer,
+                    size: 28,
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+                Text(
+                  'Sign out',
+                  style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                ),
+
+                const SizedBox(height: 8),
+                Text(
+                  'Are you sure you want to sign out of your account?',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+
+                const SizedBox(height: 24),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.of(context).pop(false),
+                        child: const Text('Cancel'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: FilledButton(
+                        onPressed: () => Navigator.of(context).pop(true),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: Colors.redAccent,
+                          foregroundColor: Colors.white,
+                        ),
+                        child: const Text('Sign out'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
-            const SizedBox(height: 8),
-            if (rate != null) Text('Rate: ${rate!.toStringAsFixed(6)}'),
+          ),
+        );
+      },
+    );
+
+    if (confirmed == true) {
+      if (mounted) context.read<AuthCubit>().signOut();
+      if (mounted) context.go(AppRouter.loginRoute);
+    }
+  }
+
+  Widget _currencyTile(String code, bool pickingFrom) {
+    final currency = currencyByCode(code);
+    final theme = Theme.of(context);
+
+    return InkWell(
+      onTap: () => _pickCurrency(pickingFrom: pickingFrom),
+      borderRadius: BorderRadius.circular(12),
+      splashColor: theme.colorScheme.primary.withValues(alpha: 0.1),
+      highlightColor: Colors.transparent,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+        child: Row(
+          children: [
+            Hero(
+              tag: 'currency-$code',
+              child: CircleAvatar(
+                radius: 20,
+                backgroundColor: Colors.white.withValues(alpha: 0.2),
+                child: Text(
+                  currency?.flag ?? code.substring(0, 1),
+                  style: const TextStyle(fontSize: 20),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    code,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black,
+                    ),
+                  ),
+                  Text(
+                    currency?.name ?? '',
+                    style: theme.textTheme.bodySmall?.copyWith(color: Colors.black87),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.expand_more, color: Colors.white70),
           ],
         ),
       ),
